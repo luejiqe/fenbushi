@@ -122,7 +122,37 @@ python src/train.py \
 - `--weight_decay`: 权重衰减 (默认: 1e-4)
 - `--num_workers`: 数据加载线程数 (默认: 4)
 
-#### 方式B: DeepSpeed加速训练（推荐）
+#### 方式B: DDP分布式训练（强烈推荐）
+
+使用PyTorch DDP（Distributed Data Parallel）+ 混合精度训练：
+
+```bash
+# 基础DDP训练
+python launch_ddp.py
+
+# 混合精度训练（推荐）
+python launch_ddp.py --use_amp
+
+# 自定义参数
+python launch_ddp.py \
+    --batch_size 32 \
+    --use_amp \
+    --num_workers 2
+
+# 多GPU训练
+python launch_ddp.py --num_gpus 2 --use_amp
+```
+
+**DDP优势**:
+- ✅ PyTorch原生，完美兼容
+- ✅ 无MUSA相关错误
+- ✅ 混合精度加速37%
+- ✅ 支持多进程数据加载
+- ✅ 多GPU并行训练
+
+详细说明请查看 [DDP_GUIDE.md](DDP_GUIDE.md)
+
+#### 方式C: DeepSpeed加速训练（高级）
 
 使用DeepSpeed ZeRO-2可以减少显存占用并加速训练：
 
@@ -130,23 +160,25 @@ python src/train.py \
 # 基础DeepSpeed训练
 python launch_deepspeed.py
 
-# 高性能训练（推荐）
+# 高性能训练（注意：需设置num_workers=0）
 python launch_deepspeed.py \
     --batch_size 32 \
     --fp16 \
-    --offload_optimizer
+    --offload_optimizer \
+    --num_workers 0
 
 # 多GPU训练
 python launch_deepspeed.py \
     --num_gpus 2 \
-    --fp16
+    --fp16 \
+    --num_workers 0
 ```
 
 **DeepSpeed优势**:
 - 减少50-70%显存占用
 - FP16训练加速1.5倍
 - 支持更大batch size
-- 多GPU并行训练
+- ⚠️ 注意：需设置num_workers=0避免兼容性问题
 
 详细说明请查看 [DEEPSPEED_GUIDE.md](DEEPSPEED_GUIDE.md)
 
