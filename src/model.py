@@ -75,7 +75,7 @@ def create_model(num_classes=90, pretrained=True, freeze_backbone=False, device=
         num_classes (int): 分类类别数
         pretrained (bool): 是否使用预训练权重
         freeze_backbone (bool): 是否冻结主干网络
-        device (str): 设备类型 ('cuda' 或 'cpu')
+        device (str or torch.device): 设备类型 ('cuda', 'musa' 或 'cpu')
 
     Returns:
         ResNet18Animals90: 模型实例
@@ -86,9 +86,23 @@ def create_model(num_classes=90, pretrained=True, freeze_backbone=False, device=
         freeze_backbone=freeze_backbone
     )
 
-    # 移动到指定设备
-    device = torch.device(device if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
+    # 移动到指定设备（支持CUDA、MUSA或CPU）
+    if isinstance(device, torch.device):
+        model = model.to(device)
+    else:
+        # 自动检测设备
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            try:
+                import torch_musa
+                if torch_musa.is_available():
+                    device = torch.device('musa')
+                else:
+                    device = torch.device('cpu')
+            except ImportError:
+                device = torch.device('cpu')
+        model = model.to(device)
 
     return model
 

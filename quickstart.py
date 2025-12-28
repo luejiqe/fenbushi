@@ -65,11 +65,24 @@ def check_environment():
 
     print(f"\nPython version: {sys.version}")
     print(f"PyTorch version: {torch.__version__}")
+
+    # 检查CUDA
     print(f"CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"CUDA version: {torch.version.cuda}")
         print(f"GPU device: {torch.cuda.get_device_name(0)}")
         print(f"GPU count: {torch.cuda.device_count()}")
+    else:
+        # 检查MUSA（摩尔线程GPU）
+        try:
+            import torch_musa
+            print(f"MUSA available: {torch_musa.is_available()}")
+            if torch_musa.is_available():
+                device_name = torch_musa.get_device_name(0) if hasattr(torch_musa, 'get_device_name') else 'Moore Threads GPU'
+                print(f"MUSA device: {device_name}")
+                print(f"MUSA count: {torch_musa.device_count() if hasattr(torch_musa, 'device_count') else 1}")
+        except ImportError:
+            print(f"MUSA available: False (torch_musa not installed)")
 
     # 检查目录
     print("\nDirectory structure:")

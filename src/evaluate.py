@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--num_workers', type=int, default=4,
                         help='数据加载线程数')
     parser.add_argument('--device', type=str, default='cuda',
-                        choices=['cuda', 'cpu'],
+                        choices=['cuda', 'musa', 'cpu'],
                         help='设备类型')
     parser.add_argument('--output_dir', type=str, default='evaluation_results',
                         help='结果保存目录')
@@ -34,8 +34,19 @@ def main():
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 设备
-    device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    # 自动检测设备：优先CUDA，其次MUSA（摩尔线程），最后CPU
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        try:
+            import torch_musa
+            if torch_musa.is_available():
+                device = torch.device('musa')
+            else:
+                device = torch.device('cpu')
+        except ImportError:
+            device = torch.device('cpu')
+
     print(f"Using device: {device}")
 
     # 加载检查点

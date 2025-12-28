@@ -23,7 +23,19 @@ class Animals90Predictor:
             checkpoint_path (str): 检查点文件路径
             device (str): 设备类型
         """
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        # 自动检测设备：优先CUDA，其次MUSA（摩尔线程），最后CPU
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        else:
+            try:
+                import torch_musa
+                if torch_musa.is_available():
+                    self.device = torch.device('musa')
+                else:
+                    self.device = torch.device('cpu')
+            except ImportError:
+                self.device = torch.device('cpu')
+
         print(f"Using device: {self.device}")
 
         # 加载检查点

@@ -29,8 +29,28 @@ class Trainer:
             config (dict): 配置参数
         """
         self.config = config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
+
+        # 自动检测设备：优先CUDA，其次MUSA（摩尔线程），最后CPU
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            device_name = torch.cuda.get_device_name(0)
+            print(f"Using device: cuda")
+            print(f"GPU: {device_name}")
+        else:
+            # 尝试检测MUSA（摩尔线程GPU）
+            try:
+                import torch_musa
+                if torch_musa.is_available():
+                    self.device = torch.device('musa')
+                    device_name = torch_musa.get_device_name(0) if hasattr(torch_musa, 'get_device_name') else 'Moore Threads GPU'
+                    print(f"Using device: musa")
+                    print(f"GPU: {device_name}")
+                else:
+                    self.device = torch.device('cpu')
+                    print(f"Using device: cpu")
+            except ImportError:
+                self.device = torch.device('cpu')
+                print(f"Using device: cpu")
 
         # 创建数据加载器
         print("Loading datasets...")
