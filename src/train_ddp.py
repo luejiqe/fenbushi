@@ -11,20 +11,18 @@ import json
 import argparse
 from datetime import datetime
 
-# 修复PyTorch MUSA兼容性问题（必须在导入torch之后，DataLoader之前）
+# 修复PyTorch MUSA兼容性问题 - 直接在storage类上添加属性
 import torch
-import torch.multiprocessing.reductions as reductions
 
-# 动态添加is_musa属性检查
-original_reduce_storage = reductions.reduce_storage
-
-def patched_reduce_storage(storage):
-    if not hasattr(storage, 'is_musa'):
-        # 动态添加is_musa属性，返回False
-        type(storage).is_musa = property(lambda self: False)
-    return original_reduce_storage(storage)
-
-reductions.reduce_storage = patched_reduce_storage
+# 为所有storage类添加is_musa属性
+for storage_class in [
+    torch.storage.UntypedStorage,
+    torch.FloatStorage, torch.DoubleStorage, torch.HalfStorage,
+    torch.BFloat16Storage, torch.LongStorage, torch.IntStorage,
+    torch.ShortStorage, torch.CharStorage, torch.ByteStorage, torch.BoolStorage
+]:
+    if not hasattr(storage_class, 'is_musa'):
+        storage_class.is_musa = property(lambda self: False)
 
 import torch.nn as nn
 import torch.optim as optim

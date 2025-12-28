@@ -1,6 +1,7 @@
 """
-DeepSpeed Training Script for Animals90 Classification
-使用DeepSpeed ZeRO-2加速训练
+DeepSpeed ZeRO-2 Training Script for Animals90 Classification
+优化用于双卡RTX 5090训练
+使用DeepSpeed ZeRO-2优化分布式训练，支持混合精度
 """
 
 import os
@@ -13,7 +14,6 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import deepspeed
-from deepspeed.ops.adam import DeepSpeedCPUAdam
 from tqdm import tqdm
 
 from model import ResNet18Animals90
@@ -54,35 +54,62 @@ class DeepSpeedTrainer:
             freeze_backbone=config['freeze_backbone']
         )
 
-        # DeepSpeed配置
-        ds_config = {
-            "train_batch_size": config['batch_size'] * args.gradient_accumulation_steps,
-            "train_micro_batch_size_per_gpu": config['batch_size'],
-            "gradient_accumulation_steps": args.gradient_accumulation_steps,
-            "optimizer": {
-                "type": "Adam",
-                "params": {
-                    "lr": config['learning_rate'],
-                    "weight_decay": config['weight_decay']
-                }
-            },
-            "fp16": {
-                "enabled": args.fp16
-            },
-            "zero_optimization": {
-                "stage": 2,
-                "offload_optimizer": {
-                    "device": "cpu" if args.offload_optimizer else "none",
-                    "pin_memory": True
+        # 从配置文件或命令行参数创建DeepSpeed配置
+        if hasattr(args, 'deepspeed_config') and args.deepspeed_config and os.path.exists(args.deepspeed_config):
+            # 从JSON文件加载配置
+            print(f"Loading DeepSpeed config from: {args.deepspeed_config}")
+            with open(args.deepspeed_config, 'r') as f:
+                ds_config = json.load(f)
+
+            # 更新自动配置的值
+            if ds_config.get("train_batch_size") == "auto":
+                ds_config["train_batch_size"] = config['batch_size'] * args.gradient_accumulation_steps
+            if ds_config.get("train_micro_batch_size_per_gpu") == "auto":
+                ds_config["train_micro_batch_size_per_gpu"] = config['batch_size']
+
+            # 更新optimizer参数
+            if "optimizer" in ds_config and "params" in ds_config["optimizer"]:
+                if ds_config["optimizer"]["params"].get("lr") == "auto":
+                    ds_config["optimizer"]["params"]["lr"] = config['learning_rate']
+                if ds_config["optimizer"]["params"].get("weight_decay") == "auto":
+                    ds_config["optimizer"]["params"]["weight_decay"] = config['weight_decay']
+
+            # 更新fp16设置
+            if "fp16" in ds_config and ds_config["fp16"].get("enabled") == "auto":
+                ds_config["fp16"]["enabled"] = args.fp16
+
+        else:
+            # 使用代码内配置
+            print("Using inline DeepSpeed configuration")
+            ds_config = {
+                "train_batch_size": config['batch_size'] * args.gradient_accumulation_steps,
+                "train_micro_batch_size_per_gpu": config['batch_size'],
+                "gradient_accumulation_steps": args.gradient_accumulation_steps,
+                "optimizer": {
+                    "type": "AdamW",
+                    "params": {
+                        "lr": config['learning_rate'],
+                        "weight_decay": config['weight_decay']
+                    }
                 },
-                "allgather_partitions": True,
-                "allgather_bucket_size": 2e8,
-                "overlap_comm": True,
-                "reduce_scatter": True,
-                "reduce_bucket_size": 2e8,
-                "contiguous_gradients": True
+                "fp16": {
+                    "enabled": args.fp16
+                },
+                "zero_optimization": {
+                    "stage": 2,
+                    "offload_optimizer": {
+                        "device": "cpu" if args.offload_optimizer else "none",
+                        "pin_memory": True
+                    },
+                    "allgather_partitions": True,
+                    "allgather_bucket_size": 5e8,
+                    "overlap_comm": True,
+                    "reduce_scatter": True,
+                    "reduce_bucket_size": 5e8,
+                    "contiguous_gradients": True,
+                    "round_robin_gradients": True
+                }
             }
-        }
 
         # 初始化DeepSpeed
         self.model_engine, self.optimizer, _, _ = deepspeed.initialize(
@@ -307,12 +334,14 @@ def main():
     # DeepSpeed参数
     parser.add_argument('--local_rank', type=int, default=-1,
                         help='DeepSpeed本地rank')
+    parser.add_argument('--deepspeed_config', type=str, default=None,
+                        help='DeepSpeed配置文件路径 (例如: ds_config_rtx5090.json)')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
                         help='梯度累积步数')
     parser.add_argument('--fp16', action='store_true', default=False,
                         help='使用FP16混合精度训练')
     parser.add_argument('--offload_optimizer', action='store_true', default=False,
-                        help='将优化器状态卸载到CPU')
+                        help='将优化器状态卸载到CPU (RTX 5090不需要)')
 
     # 保存参数
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints_deepspeed',
