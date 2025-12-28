@@ -11,7 +11,21 @@ import json
 import argparse
 from datetime import datetime
 
+# 修复PyTorch MUSA兼容性问题（必须在导入torch之后，DataLoader之前）
 import torch
+import torch.multiprocessing.reductions as reductions
+
+# 动态添加is_musa属性检查
+original_reduce_storage = reductions.reduce_storage
+
+def patched_reduce_storage(storage):
+    if not hasattr(storage, 'is_musa'):
+        # 动态添加is_musa属性，返回False
+        type(storage).is_musa = property(lambda self: False)
+    return original_reduce_storage(storage)
+
+reductions.reduce_storage = patched_reduce_storage
+
 import torch.nn as nn
 import torch.optim as optim
 import torch.distributed as dist
@@ -22,6 +36,7 @@ from tqdm import tqdm
 
 from model import ResNet18Animals90
 from dataset import Animals90Dataset, get_transforms
+
 
 
 class DDPTrainer:

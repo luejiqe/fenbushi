@@ -10,7 +10,20 @@ import json
 import argparse
 from datetime import datetime
 
+# 修复PyTorch MUSA兼容性问题
 import torch
+import torch.multiprocessing.reductions as reductions
+
+# 动态添加is_musa属性
+original_reduce_storage = reductions.reduce_storage
+
+def patched_reduce_storage(storage):
+    if not hasattr(storage, 'is_musa'):
+        type(storage).is_musa = property(lambda self: False)
+    return original_reduce_storage(storage)
+
+reductions.reduce_storage = patched_reduce_storage
+
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
@@ -18,6 +31,7 @@ from tqdm import tqdm
 
 from model import create_model
 from dataset import create_dataloaders
+
 
 
 class Trainer:
